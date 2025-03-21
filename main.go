@@ -8,11 +8,13 @@ import (
 
 func main() {
 	log.SetOutput(os.Stderr) // Deshabilitar log cambiando a io.Discard
+	port := "8080"
+	dir := "."
 	mux := http.NewServeMux()
+	mux.Handle("/", http.FileServer(http.Dir(dir)))
 	httpsrv := &http.Server{}
 	httpsrv.Handler = mux
-	port := "8080"
 	httpsrv.Addr = ":" + port
-	log.Printf("escuchando en puerto %v...\n", port)
+	log.Printf("escuchando en puerto %v\nsirviendo archivos en %v\n", port, dir)
 	log.Fatal(httpsrv.ListenAndServe())
 }
