@@ -21,9 +21,9 @@ func main() {
 		apiCfg.midwMetricsInc(http.StripPrefix("/app", http.FileServer(http.Dir(dir)))),
 	)
 	// mux.Handle("/healthz/", http.HandlerFunc(readiness))
-	mux.HandleFunc("GET /healthz", readiness)
-	mux.HandleFunc("GET /metrics", apiCfg.metrics)
-	mux.HandleFunc("POST /reset", apiCfg.reset)
+	mux.HandleFunc("GET /admin/healthz", readiness)
+	mux.HandleFunc("GET /admin/metrics", apiCfg.metrics)
+	mux.HandleFunc("POST /admin/reset", apiCfg.reset)
 
 	httpsrv := &http.Server{}
 	httpsrv.Handler = mux
