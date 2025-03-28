@@ -24,6 +24,7 @@ func main() {
 	mux.HandleFunc("GET /admin/healthz", readiness)
 	mux.HandleFunc("GET /admin/metrics", apiCfg.metrics)
 	mux.HandleFunc("POST /admin/reset", apiCfg.reset)
+	mux.HandleFunc("POST /api/validate_chirp", validateChirp)
 
 	httpsrv := &http.Server{}
 	httpsrv.Handler = mux
