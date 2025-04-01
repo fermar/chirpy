@@ -1,11 +1,17 @@
 package main
 
 import (
+	"database/sql"
 	"fmt"
 	"log"
 	"log/slog"
 	"net/http"
 	"os"
+
+	"github.com/joho/godotenv"
+	_ "github.com/lib/pq"
+
+	"github.com/fermar/chirpy/internal/database"
 )
 
 func main() {
@@ -13,8 +19,16 @@ func main() {
 	slog.SetLogLoggerLevel(slog.LevelDebug)
 	port := "8080"
 	dir := "."
+	godotenv.Load()
+	dbURL := os.Getenv("DB_URL")
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		slog.Error("bd", "err", err)
+		os.Exit(1)
+	}
 	apiCfg := apiConfig{}
 	apiCfg.fileserverHits.Store(0)
+	apiCfg.dbQueries = database.New(db)
 	mux := http.NewServeMux()
 	mux.Handle(
 		"/app/",
