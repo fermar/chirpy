@@ -12,6 +12,7 @@ import (
 type apiConfig struct {
 	fileserverHits atomic.Int32
 	dbQueries      *database.Queries
+	platform       string
 }
 
 func (cfg *apiConfig) midwMetricsInc(next http.Handler) http.Handler {
@@ -40,6 +41,16 @@ func (cfg *apiConfig) metrics(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) reset(w http.ResponseWriter, r *http.Request) {
+	slog.Debug("HIT reset")
+	if cfg.platform != "dev" {
+		respondWithError(w, http.StatusForbidden, "", nil)
+		return
+	}
+	err := cfg.dbQueries.ResetUsers(r.Context())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "error DB", err)
+		return
+	}
 	w.Header().Add("Content-Type", "text/plain; charset=utf-8") // normal header
 	w.WriteHeader(http.StatusOK)
 	cfg.fileserverHits.Store(0)

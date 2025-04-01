@@ -2,9 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 	"slices"
 	"strings"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 func validateChirp(w http.ResponseWriter, r *http.Request) {
@@ -44,4 +48,35 @@ func rechirp(body string) string {
 		}
 	}
 	return strings.Join(listaPalabras, " ")
+}
+
+type User struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Email     string    `json:"email"`
+}
+
+func (cfg *apiConfig) createUser(w http.ResponseWriter, r *http.Request) {
+	type usrData struct {
+		Email string `json:"email"`
+	}
+	decoder := json.NewDecoder(r.Body)
+	msg := usrData{}
+	err := decoder.Decode(&msg)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "error en json decode", err)
+		return
+	}
+	slog.Debug("HIT createUser", "user email", msg.Email)
+	usr, err := cfg.dbQueries.CreateUser(r.Context(), msg.Email)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "error DB", err)
+		return
+	}
+	respondWithJSON(
+		w,
+		http.StatusCreated,
+		User{ID: usr.ID, CreatedAt: usr.CreatedAt, UpdatedAt: usr.UpdatedAt, Email: usr.Email},
+	)
 }

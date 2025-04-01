@@ -21,6 +21,7 @@ func main() {
 	dir := "."
 	godotenv.Load()
 	dbURL := os.Getenv("DB_URL")
+	slog.Debug("env", "dbURL", dbURL)
 	db, err := sql.Open("postgres", dbURL)
 	if err != nil {
 		slog.Error("bd", "err", err)
@@ -29,6 +30,8 @@ func main() {
 	apiCfg := apiConfig{}
 	apiCfg.fileserverHits.Store(0)
 	apiCfg.dbQueries = database.New(db)
+	apiCfg.platform = os.Getenv("PLATFORM")
+	slog.Debug("env", "PLATFORM", apiCfg.platform)
 	mux := http.NewServeMux()
 	mux.Handle(
 		"/app/",
@@ -39,6 +42,7 @@ func main() {
 	mux.HandleFunc("GET /admin/metrics", apiCfg.metrics)
 	mux.HandleFunc("POST /admin/reset", apiCfg.reset)
 	mux.HandleFunc("POST /api/validate_chirp", validateChirp)
+	mux.HandleFunc("POST /api/users", apiCfg.createUser)
 
 	httpsrv := &http.Server{}
 	httpsrv.Handler = mux
