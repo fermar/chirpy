@@ -12,17 +12,9 @@ func respondWithError(w http.ResponseWriter, code int, msg string, err error) {
 		Error string `json:"error"`
 	}
 	respondWithJSON(w, code, errorResp{Error: msg})
-	// resp, err := json.Marshal(errorResp{Error: msg})
-	// if err != nil {
-	// 	slog.Error("error en marshal", "error", err)
-	// 	resp = []byte("")
-	// }
-	//
-	// w.WriteHeader(code)
-	// w.Write(resp)
 }
 
-func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
+func respondWithJSON(w http.ResponseWriter, code int, payload any) {
 	resp, err := json.Marshal(payload)
 	if err != nil {
 		slog.Error("error en marshal", "error", err)

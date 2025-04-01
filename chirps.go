@@ -3,15 +3,21 @@ package main
 import (
 	"encoding/json"
 	"net/http"
+	"slices"
+	"strings"
 )
 
 func validateChirp(w http.ResponseWriter, r *http.Request) {
 	type chirp struct {
 		Body string `json:"body"`
 	}
-	type validResp struct {
-		Valid bool `json:"valid"`
+	type cleaned_chirp struct {
+		CleanedBody string `json:"cleaned_body"`
 	}
+
+	// type validResp struct {
+	// 	Valid bool `json:"valid"`
+	// }
 
 	decoder := json.NewDecoder(r.Body)
 	msg := chirp{}
@@ -26,5 +32,16 @@ func validateChirp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, validResp{Valid: true})
+	respondWithJSON(w, http.StatusOK, cleaned_chirp{CleanedBody: rechirp(msg.Body)})
+}
+
+func rechirp(body string) string {
+	bannedWords := []string{"kerfuffle", "sharbert", "fornax"}
+	listaPalabras := strings.Split(body, " ")
+	for i, p := range listaPalabras {
+		if slices.Contains(bannedWords, strings.ToLower(p)) {
+			listaPalabras[i] = "****"
+		}
+	}
+	return strings.Join(listaPalabras, " ")
 }
