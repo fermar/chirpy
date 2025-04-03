@@ -13,7 +13,37 @@ import (
 	"github.com/fermar/chirpy/internal/database"
 )
 
-func (cfg *apiConfig) chirps(w http.ResponseWriter, r *http.Request) {
+type RespChirp struct {
+	ID        uuid.UUID `json:"id"`
+	CreatedAt time.Time `json:"created_at"`
+	UpdatedAt time.Time `json:"updated_at"`
+	Body      string    `json:"body"`
+	UserID    uuid.UUID `json:"user_id"`
+}
+
+func (cfg *apiConfig) getAllChirps(w http.ResponseWriter, r *http.Request) {
+	allChirpsBD, err := cfg.dbQueries.GetAllChirps(r.Context())
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "BD error", err)
+		return
+	}
+	allChirps := []RespChirp{}
+	for _, chirp := range allChirpsBD {
+		allChirps = append(
+			allChirps,
+			RespChirp{
+				ID:        chirp.ID,
+				CreatedAt: chirp.CreatedAt,
+				UpdatedAt: chirp.CreatedAt,
+				Body:      chirp.Body,
+				UserID:    chirp.UserID,
+			},
+		)
+	}
+	respondWithJSON(w, http.StatusOK, allChirps)
+}
+
+func (cfg *apiConfig) createChirp(w http.ResponseWriter, r *http.Request) {
 	type chirp struct {
 		Body    string    `json:"body"`
 		User_ID uuid.UUID `json:"user_id"`
@@ -21,13 +51,13 @@ func (cfg *apiConfig) chirps(w http.ResponseWriter, r *http.Request) {
 	type cleaned_chirp struct {
 		CleanedBody string `json:"cleaned_body"`
 	}
-	type respChirp struct {
-		ID        uuid.UUID `json:"id"`
-		CreatedAt time.Time `json:"created_at"`
-		UpdatedAt time.Time `json:"updated_at"`
-		Body      string    `json:"body"`
-		UserID    uuid.UUID `json:"user_id"`
-	}
+	// type respChirp struct {
+	// 	ID        uuid.UUID `json:"id"`
+	// 	CreatedAt time.Time `json:"created_at"`
+	// 	UpdatedAt time.Time `json:"updated_at"`
+	// 	Body      string    `json:"body"`
+	// 	UserID    uuid.UUID `json:"user_id"`
+	// }
 	decoder := json.NewDecoder(r.Body)
 	msg := chirp{}
 	err := decoder.Decode(&msg)
@@ -55,7 +85,7 @@ func (cfg *apiConfig) chirps(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(
 		w,
 		http.StatusCreated,
-		respChirp{
+		RespChirp{
 			ID:        newChirp.ID,
 			CreatedAt: newChirp.CreatedAt,
 			UpdatedAt: newChirp.UpdatedAt,
