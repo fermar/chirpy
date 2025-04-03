@@ -9,20 +9,25 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+
+	"github.com/fermar/chirpy/internal/database"
 )
 
-func validateChirp(w http.ResponseWriter, r *http.Request) {
+func (cfg *apiConfig) chirps(w http.ResponseWriter, r *http.Request) {
 	type chirp struct {
-		Body string `json:"body"`
+		Body    string    `json:"body"`
+		User_ID uuid.UUID `json:"user_id"`
 	}
 	type cleaned_chirp struct {
 		CleanedBody string `json:"cleaned_body"`
 	}
-
-	// type validResp struct {
-	// 	Valid bool `json:"valid"`
-	// }
-
+	type respChirp struct {
+		ID        uuid.UUID `json:"id"`
+		CreatedAt time.Time `json:"created_at"`
+		UpdatedAt time.Time `json:"updated_at"`
+		Body      string    `json:"body"`
+		UserID    uuid.UUID `json:"user_id"`
+	}
 	decoder := json.NewDecoder(r.Body)
 	msg := chirp{}
 	err := decoder.Decode(&msg)
@@ -36,7 +41,28 @@ func validateChirp(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	respondWithJSON(w, http.StatusOK, cleaned_chirp{CleanedBody: rechirp(msg.Body)})
+	chirpParams := database.CreateChirpParams{
+		Body:   msg.Body,
+		UserID: msg.User_ID,
+	}
+	newChirp, err := cfg.dbQueries.CreateChirp(r.Context(), chirpParams)
+	if err != nil {
+
+		respondWithError(w, http.StatusInternalServerError, "BD error", err)
+		return
+	}
+	// respondWithJSON(w, http.StatusOK, cleaned_chirp{CleanedBody: rechirp(msg.Body)})
+	respondWithJSON(
+		w,
+		http.StatusCreated,
+		respChirp{
+			ID:        newChirp.ID,
+			CreatedAt: newChirp.CreatedAt,
+			UpdatedAt: newChirp.UpdatedAt,
+			Body:      rechirp(newChirp.Body),
+			UserID:    newChirp.UserID,
+		},
+	)
 }
 
 func rechirp(body string) string {
