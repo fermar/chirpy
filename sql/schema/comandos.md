@@ -1,0 +1,3 @@
+- goose postgres postgres://postgres:postgres@localhost:5432/chirpy version
+- goose postgres postgres://postgres:postgres@localhost:5432/chirpy status
+- goose postgres postgres://postgres:postgres@localhost:5432/chirpy up
