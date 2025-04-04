@@ -44,6 +44,7 @@ func main() {
 	// mux.HandleFunc("POST /api/validate_chirp", validateChirp)
 	mux.HandleFunc("POST /api/chirps", apiCfg.createChirp)
 	mux.HandleFunc("GET /api/chirps", apiCfg.getAllChirps)
+	mux.HandleFunc("GET /api/chirps/{chirpID}", apiCfg.getChirpByID)
 	mux.HandleFunc("POST /api/users", apiCfg.createUser)
 
 	httpsrv := &http.Server{}
