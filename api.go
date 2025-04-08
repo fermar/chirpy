@@ -10,6 +10,7 @@ import (
 
 	"github.com/google/uuid"
 
+	"github.com/fermar/chirpy/internal/auth"
 	"github.com/fermar/chirpy/internal/database"
 )
 
@@ -138,19 +139,55 @@ type User struct {
 	Email     string    `json:"email"`
 }
 
-func (cfg *apiConfig) createUser(w http.ResponseWriter, r *http.Request) {
-	type usrData struct {
-		Email string `json:"email"`
-	}
+type UsrData struct {
+	Password string `json:"password"`
+	Email    string `json:"email"`
+}
+
+func (cfg *apiConfig) login(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
-	msg := usrData{}
+	msg := UsrData{}
+	err := decoder.Decode(&msg)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "error en json decode", err)
+		return
+	}
+	slog.Debug("HIT login", "user email", msg.Email)
+	usr, err := cfg.dbQueries.GetUserByEmail(r.Context(), msg.Email)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "error DB", err)
+		return
+	}
+	err = auth.CheckPasswordHash(usr.HashedPassword, msg.Password)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "error DB", err)
+		return
+	}
+	respondWithJSON(
+		w,
+		http.StatusOK,
+		User{ID: usr.ID, CreatedAt: usr.CreatedAt, UpdatedAt: usr.UpdatedAt, Email: usr.Email},
+	)
+}
+
+func (cfg *apiConfig) createUser(w http.ResponseWriter, r *http.Request) {
+	decoder := json.NewDecoder(r.Body)
+	msg := UsrData{}
 	err := decoder.Decode(&msg)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "error en json decode", err)
 		return
 	}
 	slog.Debug("HIT createUser", "user email", msg.Email)
-	usr, err := cfg.dbQueries.CreateUser(r.Context(), msg.Email)
+	hp, err := auth.HashPassword(msg.Password)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "error srv", err)
+	}
+	cuparams := database.CreateUserParams{
+		HashedPassword: hp,
+		Email:          msg.Email,
+	}
+	usr, err := cfg.dbQueries.CreateUser(r.Context(), cuparams)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "error DB", err)
 		return
