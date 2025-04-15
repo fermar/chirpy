@@ -31,6 +31,7 @@ func main() {
 	apiCfg.fileserverHits.Store(0)
 	apiCfg.dbQueries = database.New(db)
 	apiCfg.platform = os.Getenv("PLATFORM")
+	apiCfg.secret = os.Getenv("JWTSECRET")
 	slog.Debug("env", "PLATFORM", apiCfg.platform)
 	mux := http.NewServeMux()
 	mux.Handle(

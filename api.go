@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -84,9 +85,20 @@ func (cfg *apiConfig) createChirp(w http.ResponseWriter, r *http.Request) {
 	// 	Body      string    `json:"body"`
 	// 	UserID    uuid.UUID `json:"user_id"`
 	// }
+
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "error getting token header", err)
+		return
+	}
+	usrid, err := auth.ValidateJWT(token, cfg.secret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "error validating token", err)
+		return
+	}
 	decoder := json.NewDecoder(r.Body)
 	msg := chirp{}
-	err := decoder.Decode(&msg)
+	err = decoder.Decode(&msg)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "error en json decode", err)
 		return
@@ -98,9 +110,11 @@ func (cfg *apiConfig) createChirp(w http.ResponseWriter, r *http.Request) {
 	}
 
 	chirpParams := database.CreateChirpParams{
-		Body:   msg.Body,
-		UserID: msg.User_ID,
+		Body: msg.Body,
+		// UserID: msg.User_ID,
+		UserID: usrid,
 	}
+
 	newChirp, err := cfg.dbQueries.CreateChirp(r.Context(), chirpParams)
 	if err != nil {
 
@@ -137,11 +151,13 @@ type User struct {
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 	Email     string    `json:"email"`
+	Token     string    `json:"token"`
 }
 
 type UsrData struct {
-	Password string `json:"password"`
-	Email    string `json:"email"`
+	Password  string `json:"password"`
+	Email     string `json:"email"`
+	ExpiresIn *int   `json:"expires_in_seconds,omitempty"`
 }
 
 func (cfg *apiConfig) login(w http.ResponseWriter, r *http.Request) {
@@ -151,6 +167,10 @@ func (cfg *apiConfig) login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "error en json decode", err)
 		return
+	}
+	if msg.ExpiresIn == nil || *msg.ExpiresIn <= 0 || *msg.ExpiresIn > 3600 {
+		defaultExp := 3600
+		msg.ExpiresIn = &defaultExp
 	}
 	slog.Debug("HIT login", "user email", msg.Email)
 	usr, err := cfg.dbQueries.GetUserByEmail(r.Context(), msg.Email)
@@ -163,10 +183,26 @@ func (cfg *apiConfig) login(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusUnauthorized, "error DB", err)
 		return
 	}
+	expTime, err := time.ParseDuration(fmt.Sprintf("%ds", *msg.ExpiresIn))
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "error req", err)
+		return
+	}
+	token, err := auth.MakeJWT(usr.ID, cfg.secret, expTime)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "error srv", err)
+		return
+	}
 	respondWithJSON(
 		w,
 		http.StatusOK,
-		User{ID: usr.ID, CreatedAt: usr.CreatedAt, UpdatedAt: usr.UpdatedAt, Email: usr.Email},
+		User{
+			ID:        usr.ID,
+			CreatedAt: usr.CreatedAt,
+			UpdatedAt: usr.UpdatedAt,
+			Email:     usr.Email,
+			Token:     token,
+		},
 	)
 }
 
