@@ -2,7 +2,6 @@ package main
 
 import (
 	"encoding/json"
-	"fmt"
 	"log/slog"
 	"net/http"
 	"slices"
@@ -49,6 +48,7 @@ func (cfg *apiConfig) getChirpByID(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) getAllChirps(w http.ResponseWriter, r *http.Request) {
+	slog.Debug("HIT chirps")
 	allChirpsBD, err := cfg.dbQueries.GetAllChirps(r.Context())
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "BD error", err)
@@ -78,14 +78,6 @@ func (cfg *apiConfig) createChirp(w http.ResponseWriter, r *http.Request) {
 	type cleaned_chirp struct {
 		CleanedBody string `json:"cleaned_body"`
 	}
-	// type respChirp struct {
-	// 	ID        uuid.UUID `json:"id"`
-	// 	CreatedAt time.Time `json:"created_at"`
-	// 	UpdatedAt time.Time `json:"updated_at"`
-	// 	Body      string    `json:"body"`
-	// 	UserID    uuid.UUID `json:"user_id"`
-	// }
-
 	token, err := auth.GetBearerToken(r.Header)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "error getting token header", err)
@@ -147,17 +139,57 @@ func rechirp(body string) string {
 }
 
 type User struct {
-	ID        uuid.UUID `json:"id"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-	Email     string    `json:"email"`
-	Token     string    `json:"token"`
+	ID           uuid.UUID `json:"id"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+	Email        string    `json:"email"`
+	Token        string    `json:"token"`
+	RefreshToken string    `json:"refresh_token"`
 }
 
 type UsrData struct {
-	Password  string `json:"password"`
-	Email     string `json:"email"`
-	ExpiresIn *int   `json:"expires_in_seconds,omitempty"`
+	Password string `json:"password"`
+	Email    string `json:"email"`
+	// ExpiresIn *int   `json:"expires_in_seconds,omitempty"`
+}
+
+func (cfg *apiConfig) revoke(w http.ResponseWriter, r *http.Request) {
+	slog.Debug("HIT revoke")
+	refreshToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "error getting token header", err)
+		return
+	}
+	err = cfg.dbQueries.RevokeRefreshToken(r.Context(), refreshToken)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "error updating token in DB", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (cfg *apiConfig) refresh(w http.ResponseWriter, r *http.Request) {
+	slog.Debug("HIT refresh")
+	refreshToken, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "error getting token header", err)
+		return
+	}
+	slog.Debug("HIT Refresh", "refresh Token (from auth header)", refreshToken)
+	refTokenDb, err := cfg.dbQueries.GetRefreshToken(r.Context(), refreshToken)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "error getting token header from DB", err)
+		return
+	}
+	accessToken, err := auth.MakeJWT(refTokenDb.UserID, cfg.secret, time.Hour)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "error srv", err)
+		return
+	}
+	type tokenResponse struct {
+		Token string `json:"token"`
+	}
+	respondWithJSON(w, http.StatusOK, tokenResponse{Token: accessToken})
 }
 
 func (cfg *apiConfig) login(w http.ResponseWriter, r *http.Request) {
@@ -167,10 +199,6 @@ func (cfg *apiConfig) login(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "error en json decode", err)
 		return
-	}
-	if msg.ExpiresIn == nil || *msg.ExpiresIn <= 0 || *msg.ExpiresIn > 3600 {
-		defaultExp := 3600
-		msg.ExpiresIn = &defaultExp
 	}
 	slog.Debug("HIT login", "user email", msg.Email)
 	usr, err := cfg.dbQueries.GetUserByEmail(r.Context(), msg.Email)
@@ -183,7 +211,8 @@ func (cfg *apiConfig) login(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusUnauthorized, "error DB", err)
 		return
 	}
-	expTime, err := time.ParseDuration(fmt.Sprintf("%ds", *msg.ExpiresIn))
+	defaultExp := "3600s"
+	expTime, err := time.ParseDuration(defaultExp)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "error req", err)
 		return
@@ -193,15 +222,26 @@ func (cfg *apiConfig) login(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusInternalServerError, "error srv", err)
 		return
 	}
+	refreshToken, _ := auth.MakeRefreshToken()
+	crtParams := database.CreateRefreshTokenParams{
+		Token:  refreshToken,
+		UserID: usr.ID,
+	}
+	_, err = cfg.dbQueries.CreateRefreshToken(r.Context(), crtParams)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "error DB", err)
+		return
+	}
 	respondWithJSON(
 		w,
 		http.StatusOK,
 		User{
-			ID:        usr.ID,
-			CreatedAt: usr.CreatedAt,
-			UpdatedAt: usr.UpdatedAt,
-			Email:     usr.Email,
-			Token:     token,
+			ID:           usr.ID,
+			CreatedAt:    usr.CreatedAt,
+			UpdatedAt:    usr.UpdatedAt,
+			Email:        usr.Email,
+			Token:        token,
+			RefreshToken: refreshToken,
 		},
 	)
 }
