@@ -143,8 +143,8 @@ type User struct {
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 	Email        string    `json:"email"`
-	Token        string    `json:"token"`
-	RefreshToken string    `json:"refresh_token"`
+	Token        string    `json:"token,omitempty"`
+	RefreshToken string    `json:"refresh_token,omitempty"`
 }
 
 type UsrData struct {
@@ -272,5 +272,52 @@ func (cfg *apiConfig) createUser(w http.ResponseWriter, r *http.Request) {
 		w,
 		http.StatusCreated,
 		User{ID: usr.ID, CreatedAt: usr.CreatedAt, UpdatedAt: usr.UpdatedAt, Email: usr.Email},
+	)
+}
+
+func (cfg *apiConfig) updateUser(w http.ResponseWriter, r *http.Request) {
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "error getting token header", err)
+		return
+	}
+	usrid, err := auth.ValidateJWT(token, cfg.secret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "error validating token", err)
+		return
+	}
+	decoder := json.NewDecoder(r.Body)
+	newUserData := UsrData{}
+	err = decoder.Decode(&newUserData)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "error en json decode", err)
+		return
+	}
+	hashedpass, err := auth.HashPassword(newUserData.Password)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "srv error", err)
+		return
+	}
+	uuparams := database.UpdateUserParams{
+		Email:          newUserData.Email,
+		HashedPassword: hashedpass,
+		ID:             usrid,
+	}
+	usr, err := cfg.dbQueries.UpdateUser(r.Context(), uuparams)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "BD error", err)
+		return
+	}
+	// respondWithJSON(w, http.StatusOK, cleaned_chirp{CleanedBody: rechirp(msg.Body)})
+	respondWithJSON(
+		w,
+		http.StatusOK,
+		User{
+			ID:        usr.ID,
+			CreatedAt: usr.CreatedAt,
+			UpdatedAt: usr.UpdatedAt,
+			Email:     usr.Email,
+			// Token:     token,
+		},
 	)
 }
