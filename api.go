@@ -276,6 +276,7 @@ func (cfg *apiConfig) createUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (cfg *apiConfig) updateUser(w http.ResponseWriter, r *http.Request) {
+	slog.Debug("HIT UPDATE User")
 	token, err := auth.GetBearerToken(r.Header)
 	if err != nil {
 		respondWithError(w, http.StatusUnauthorized, "error getting token header", err)
@@ -320,4 +321,42 @@ func (cfg *apiConfig) updateUser(w http.ResponseWriter, r *http.Request) {
 			// Token:     token,
 		},
 	)
+}
+
+func (cfg *apiConfig) deleteChirp(w http.ResponseWriter, r *http.Request) {
+	chid, err := uuid.Parse(r.PathValue("chirpID"))
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "UUID error", err)
+		return
+	}
+	slog.Debug("HIT Delete Chirp", "ID", chid)
+
+	token, err := auth.GetBearerToken(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "error getting token header", err)
+		return
+	}
+	usrid, err := auth.ValidateJWT(token, cfg.secret)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "error validating token", err)
+		return
+	}
+
+	chirp, err := cfg.dbQueries.GetChirpByID(r.Context(), chid)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "BD error", err)
+		return
+	}
+
+	if chirp.UserID != usrid {
+		respondWithError(w, http.StatusForbidden, "auth error", err)
+		return
+	}
+
+	err = cfg.dbQueries.DeleteChirpByID(r.Context(), chid)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "BD error", err)
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }
