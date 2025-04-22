@@ -127,6 +127,40 @@ func (cfg *apiConfig) createChirp(w http.ResponseWriter, r *http.Request) {
 	)
 }
 
+func (cfg *apiConfig) polkaUpgradeUser(w http.ResponseWriter, r *http.Request) {
+	type event struct {
+		Event string `json:"event"`
+		Data  struct {
+			UserId string `json:"user_id"`
+		} `json:"data"`
+	}
+	decoder := json.NewDecoder(r.Body)
+	msg := event{}
+	err := decoder.Decode(&msg)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "error en json decode", err)
+		return
+	}
+
+	if msg.Event != "user.upgraded" {
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	updateUuid, err := uuid.Parse(msg.Data.UserId)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "error en json decode", err)
+		return
+	}
+	err = cfg.dbQueries.UpgradeUser(r.Context(), updateUuid)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "BD error", err)
+		return
+	}
+	// respondWithJSON(w, http.StatusOK, cleaned_chirp{CleanedBody: rechirp(msg.Body)})
+	w.WriteHeader(http.StatusNoContent)
+}
+
 func rechirp(body string) string {
 	bannedWords := []string{"kerfuffle", "sharbert", "fornax"}
 	listaPalabras := strings.Split(body, " ")
@@ -143,6 +177,7 @@ type User struct {
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 	Email        string    `json:"email"`
+	IsChirpyRed  bool      `json:"is_chirpy_red"`
 	Token        string    `json:"token,omitempty"`
 	RefreshToken string    `json:"refresh_token,omitempty"`
 }
@@ -240,6 +275,7 @@ func (cfg *apiConfig) login(w http.ResponseWriter, r *http.Request) {
 			CreatedAt:    usr.CreatedAt,
 			UpdatedAt:    usr.UpdatedAt,
 			Email:        usr.Email,
+			IsChirpyRed:  usr.IsChirpyRed,
 			Token:        token,
 			RefreshToken: refreshToken,
 		},
@@ -271,7 +307,13 @@ func (cfg *apiConfig) createUser(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(
 		w,
 		http.StatusCreated,
-		User{ID: usr.ID, CreatedAt: usr.CreatedAt, UpdatedAt: usr.UpdatedAt, Email: usr.Email},
+		User{
+			ID:          usr.ID,
+			CreatedAt:   usr.CreatedAt,
+			UpdatedAt:   usr.UpdatedAt,
+			Email:       usr.Email,
+			IsChirpyRed: usr.IsChirpyRed,
+		},
 	)
 }
 
@@ -314,10 +356,11 @@ func (cfg *apiConfig) updateUser(w http.ResponseWriter, r *http.Request) {
 		w,
 		http.StatusOK,
 		User{
-			ID:        usr.ID,
-			CreatedAt: usr.CreatedAt,
-			UpdatedAt: usr.UpdatedAt,
-			Email:     usr.Email,
+			ID:          usr.ID,
+			CreatedAt:   usr.CreatedAt,
+			UpdatedAt:   usr.UpdatedAt,
+			Email:       usr.Email,
+			IsChirpyRed: usr.IsChirpyRed,
 			// Token:     token,
 		},
 	)

@@ -52,6 +52,7 @@ func main() {
 	mux.HandleFunc("POST /api/refresh", apiCfg.refresh)
 	mux.HandleFunc("POST /api/revoke", apiCfg.revoke)
 	mux.HandleFunc("DELETE /api/chirps/{chirpID}", apiCfg.deleteChirp)
+	mux.HandleFunc("POST /api/polka/webhooks", apiCfg.polkaUpgradeUser)
 
 	httpsrv := &http.Server{}
 	httpsrv.Handler = mux
