@@ -47,8 +47,42 @@ func (cfg *apiConfig) getChirpByID(w http.ResponseWriter, r *http.Request) {
 	)
 }
 
+func (cfg *apiConfig) getChirps(w http.ResponseWriter, r *http.Request) {
+	slog.Debug("HIT GetChirps")
+	authorId := r.URL.Query().Get("author_id")
+	if authorId == "" {
+		cfg.getAllChirps(w, r)
+		return
+	}
+	authUuid, err := uuid.Parse(authorId)
+	if err != nil {
+		respondWithError(w, http.StatusInternalServerError, "UUID error", err)
+		return
+	}
+	slog.Debug("HIT Chirps By UserId", "autor ID", authUuid)
+	chirps, err := cfg.dbQueries.GetChirpByUserID(r.Context(), authUuid)
+	if err != nil {
+		respondWithError(w, http.StatusNotFound, "chirp by userid error", err)
+		return
+	}
+	allChirps := []RespChirp{}
+	for _, chirp := range chirps {
+		allChirps = append(
+			allChirps,
+			RespChirp{
+				ID:        chirp.ID,
+				CreatedAt: chirp.CreatedAt,
+				UpdatedAt: chirp.CreatedAt,
+				Body:      rechirp(chirp.Body),
+				UserID:    chirp.UserID,
+			},
+		)
+	}
+	respondWithJSON(w, http.StatusOK, allChirps)
+}
+
 func (cfg *apiConfig) getAllChirps(w http.ResponseWriter, r *http.Request) {
-	slog.Debug("HIT chirps")
+	slog.Debug("HIT All chirps")
 	allChirpsBD, err := cfg.dbQueries.GetAllChirps(r.Context())
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "BD error", err)
