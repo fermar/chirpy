@@ -5,6 +5,7 @@ import (
 	"log/slog"
 	"net/http"
 	"slices"
+	"sort"
 	"strings"
 	"time"
 
@@ -50,21 +51,43 @@ func (cfg *apiConfig) getChirpByID(w http.ResponseWriter, r *http.Request) {
 func (cfg *apiConfig) getChirps(w http.ResponseWriter, r *http.Request) {
 	slog.Debug("HIT GetChirps")
 	authorId := r.URL.Query().Get("author_id")
+	chirps := make([]database.Chirp, 0)
 	if authorId == "" {
-		cfg.getAllChirps(w, r)
-		return
+		// chirps, err := cfg.getAllChirps(w, r)
+		chs, err := cfg.dbQueries.GetAllChirps(r.Context())
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "bd error", err)
+			return
+		}
+		chirps = append(chirps, chs...)
+
+	} else {
+		authUuid, err := uuid.Parse(authorId)
+		slog.Debug("HIT Chirps By UserId", "autor ID", authUuid)
+		if err != nil {
+			respondWithError(w, http.StatusInternalServerError, "UUID error", err)
+			return
+		}
+
+		chs, err := cfg.dbQueries.GetChirpByUserID(r.Context(), authUuid)
+		if err != nil {
+			respondWithError(w, http.StatusNotFound, "chirp by userid error", err)
+			return
+		}
+		chirps = append(chirps, chs...)
 	}
-	authUuid, err := uuid.Parse(authorId)
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "UUID error", err)
-		return
+
+	sortType := r.URL.Query().Get("sort")
+	if sortType != "desc" {
+		sortType = "asc"
+	} else {
+		sort.Slice(
+			chirps,
+			func(i int, j int) bool {
+				return chirps[i].CreatedAt.After(chirps[j].CreatedAt)
+			})
 	}
-	slog.Debug("HIT Chirps By UserId", "autor ID", authUuid)
-	chirps, err := cfg.dbQueries.GetChirpByUserID(r.Context(), authUuid)
-	if err != nil {
-		respondWithError(w, http.StatusNotFound, "chirp by userid error", err)
-		return
-	}
+
 	allChirps := []RespChirp{}
 	for _, chirp := range chirps {
 		allChirps = append(
@@ -81,28 +104,31 @@ func (cfg *apiConfig) getChirps(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, allChirps)
 }
 
-func (cfg *apiConfig) getAllChirps(w http.ResponseWriter, r *http.Request) {
-	slog.Debug("HIT All chirps")
-	allChirpsBD, err := cfg.dbQueries.GetAllChirps(r.Context())
-	if err != nil {
-		respondWithError(w, http.StatusInternalServerError, "BD error", err)
-		return
-	}
-	allChirps := []RespChirp{}
-	for _, chirp := range allChirpsBD {
-		allChirps = append(
-			allChirps,
-			RespChirp{
-				ID:        chirp.ID,
-				CreatedAt: chirp.CreatedAt,
-				UpdatedAt: chirp.CreatedAt,
-				Body:      rechirp(chirp.Body),
-				UserID:    chirp.UserID,
-			},
-		)
-	}
-	respondWithJSON(w, http.StatusOK, allChirps)
-}
+// func (cfg *apiConfig) getAllChirps(
+// 	w http.ResponseWriter,
+// 	r *http.Request,
+// ) ([]database.Chirp, error) {
+// 	slog.Debug("HIT All chirps")
+// 	allChirpsBD, err := cfg.dbQueries.GetAllChirps(r.Context())
+// 	if err != nil {
+// 		// respondWithError(w, http.StatusInternalServerError, "BD error", err)
+// 		return allChirpsBD, err
+// 	}
+// 	allChirps := []RespChirp{}
+// 	for _, chirp := range allChirpsBD {
+// 		allChirps = append(
+// 			allChirps,
+// 			RespChirp{
+// 				ID:        chirp.ID,
+// 				CreatedAt: chirp.CreatedAt,
+// 				UpdatedAt: chirp.CreatedAt,
+// 				Body:      rechirp(chirp.Body),
+// 				UserID:    chirp.UserID,
+// 			},
+// 		)
+// 	}
+// 	// respondWithJSON(w, http.StatusOK, allChirps)
+// }
 
 func (cfg *apiConfig) createChirp(w http.ResponseWriter, r *http.Request) {
 	type chirp struct {
