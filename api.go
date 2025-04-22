@@ -134,9 +134,19 @@ func (cfg *apiConfig) polkaUpgradeUser(w http.ResponseWriter, r *http.Request) {
 			UserId string `json:"user_id"`
 		} `json:"data"`
 	}
+	slog.Debug("HIT Upgrade User")
+	apiKey, err := auth.GetAPIKey(r.Header)
+	if err != nil {
+		respondWithError(w, http.StatusUnauthorized, "error al leer api key", err)
+		return
+	}
+	if apiKey != cfg.apiKey {
+		respondWithError(w, http.StatusUnauthorized, "api key incorrecta", nil)
+		return
+	}
 	decoder := json.NewDecoder(r.Body)
 	msg := event{}
-	err := decoder.Decode(&msg)
+	err = decoder.Decode(&msg)
 	if err != nil {
 		respondWithError(w, http.StatusInternalServerError, "error en json decode", err)
 		return

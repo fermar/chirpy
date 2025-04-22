@@ -32,6 +32,7 @@ func main() {
 	apiCfg.dbQueries = database.New(db)
 	apiCfg.platform = os.Getenv("PLATFORM")
 	apiCfg.secret = os.Getenv("JWTSECRET")
+	apiCfg.apiKey = os.Getenv("POLKA_KEY")
 	slog.Debug("env", "PLATFORM", apiCfg.platform)
 	mux := http.NewServeMux()
 	mux.Handle(

@@ -14,6 +14,7 @@ type apiConfig struct {
 	dbQueries      *database.Queries
 	platform       string
 	secret         string
+	apiKey         string
 }
 
 func (cfg *apiConfig) midwMetricsInc(next http.Handler) http.Handler {
